@@ -1,0 +1,524 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MLOps Pipeline – System Design</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f1117;
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 40px 24px;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 1.8rem;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: #f8fafc;
+    }
+
+    .subtitle {
+      text-align: center;
+      color: #94a3b8;
+      font-size: 0.9rem;
+      margin-bottom: 48px;
+    }
+
+    /* ── PIPELINE ROW ─────────────────────────────────────────── */
+    .pipeline {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 0;
+      margin-bottom: 56px;
+    }
+
+    .stage {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stage-box {
+      width: 120px;
+      padding: 14px 10px;
+      border-radius: 12px;
+      text-align: center;
+      border: 1.5px solid;
+      cursor: default;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+
+    .stage-box:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+    }
+
+    .stage-box .icon { font-size: 1.6rem; margin-bottom: 6px; }
+    .stage-box .label { font-size: 0.72rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; }
+    .stage-box .tech  { font-size: 0.65rem; color: #94a3b8; margin-top: 4px; }
+
+    .arrow {
+      font-size: 1.4rem;
+      color: #475569;
+      padding: 0 4px;
+      line-height: 1;
+      margin-top: -20px;
+    }
+
+    /* stage colours */
+    .c-ingest   { background: #0f2027; border-color: #0ea5e9; color: #7dd3fc; }
+    .c-features { background: #0f1f0f; border-color: #22c55e; color: #86efac; }
+    .c-train    { background: #1a1040; border-color: #a78bfa; color: #c4b5fd; }
+    .c-eval     { background: #1f1020; border-color: #e879f9; color: #f0abfc; }
+    .c-serve    { background: #1a0f0f; border-color: #f97316; color: #fdba74; }
+    .c-monitor  { background: #1a1500; border-color: #eab308; color: #fde047; }
+    .c-retrain  { background: #0f1a1a; border-color: #14b8a6; color: #5eead4; }
+
+    /* ── INFRASTRUCTURE GRID ──────────────────────────────────── */
+    .section-title {
+      text-align: center;
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 20px;
+    }
+
+    .infra-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      max-width: 1100px;
+      margin: 0 auto 56px;
+    }
+
+    .infra-card {
+      background: #1e2330;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      padding: 18px 16px;
+      transition: border-color 0.2s;
+    }
+
+    .infra-card:hover { border-color: #4a5568; }
+
+    .infra-card h3 {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #94a3b8;
+      margin-bottom: 10px;
+    }
+
+    .infra-card .service {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 5px 0;
+      font-size: 0.82rem;
+      color: #cbd5e1;
+      border-bottom: 1px solid #2d3748;
+    }
+
+    .infra-card .service:last-child { border-bottom: none; }
+
+    .infra-card .service .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .infra-card .service .port {
+      margin-left: auto;
+      font-size: 0.68rem;
+      color: #475569;
+      font-family: monospace;
+    }
+
+    /* ── DATA FLOW ────────────────────────────────────────────── */
+    .flow-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+      max-width: 1100px;
+      margin: 0 auto 56px;
+    }
+
+    .flow-card {
+      background: #1e2330;
+      border: 1px solid #2d3748;
+      border-radius: 12px;
+      padding: 18px 16px;
+    }
+
+    .flow-card h3 {
+      font-size: 0.78rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      margin-bottom: 12px;
+    }
+
+    .flow-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .flow-step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.8rem;
+      color: #94a3b8;
+    }
+
+    .flow-step .num {
+      width: 20px; height: 20px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.65rem;
+      font-weight: 700;
+      flex-shrink: 0;
+      color: #0f1117;
+    }
+
+    .flow-connector {
+      margin-left: 9px;
+      width: 2px;
+      height: 8px;
+      background: #2d3748;
+    }
+
+    /* ── LEGEND ───────────────────────────────────────────────── */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 16px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.75rem;
+      color: #94a3b8;
+    }
+
+    .legend-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+
+    /* ── CI/CD ROW ────────────────────────────────────────────── */
+    .cicd-row {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      flex-wrap: wrap;
+      max-width: 900px;
+      margin: 0 auto 56px;
+    }
+
+    .cicd-box {
+      background: #1e2330;
+      border: 1px solid #2d3748;
+      border-radius: 10px;
+      padding: 12px 20px;
+      text-align: center;
+      min-width: 130px;
+    }
+
+    .cicd-box .icon { font-size: 1.3rem; }
+    .cicd-box .label { font-size: 0.72rem; font-weight: 600; color: #cbd5e1; margin-top: 4px; }
+    .cicd-box .sub   { font-size: 0.62rem; color: #64748b; margin-top: 2px; }
+
+    .cicd-arrow {
+      font-size: 1.2rem;
+      color: #334155;
+      padding: 0 6px;
+    }
+  </style>
+</head>
+<body>
+
+  <h1>MLOps Pipeline — System Design</h1>
+  <p class="subtitle">Customer Churn Prediction · Airflow · MLflow · FastAPI · Evidently AI</p>
+
+  <!-- ── PIPELINE ── -->
+  <p class="section-title">ML Pipeline</p>
+  <div class="pipeline">
+
+    <div class="stage">
+      <div class="stage-box c-ingest">
+        <div class="icon">🗄️</div>
+        <div class="label">Ingest</div>
+        <div class="tech">Airflow DAG</div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box c-features">
+        <div class="icon">⚙️</div>
+        <div class="label">Features</div>
+        <div class="tech">sklearn Pipeline</div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box c-train">
+        <div class="icon">🧠</div>
+        <div class="label">Train</div>
+        <div class="tech">MLflow Autolog</div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box c-eval">
+        <div class="icon">📊</div>
+        <div class="label">Evaluate</div>
+        <div class="tech">Champion/Challenger</div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box c-serve">
+        <div class="icon">🚀</div>
+        <div class="label">Serve</div>
+        <div class="tech">FastAPI :8000</div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box c-monitor">
+        <div class="icon">📡</div>
+        <div class="label">Monitor</div>
+        <div class="tech">Evidently AI</div>
+      </div>
+    </div>
+
+    <div class="arrow">→</div>
+
+    <div class="stage">
+      <div class="stage-box c-retrain">
+        <div class="icon">🔄</div>
+        <div class="label">Retrain</div>
+        <div class="tech">Airflow DAG</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── INFRASTRUCTURE ── -->
+  <p class="section-title">Infrastructure Services</p>
+  <div class="infra-grid">
+
+    <div class="infra-card">
+      <h3>🌊 Orchestration</h3>
+      <div class="service"><span class="dot" style="background:#0ea5e9"></span>Airflow Webserver<span class="port">:8080</span></div>
+      <div class="service"><span class="dot" style="background:#0ea5e9"></span>Airflow Scheduler</div>
+      <div class="service"><span class="dot" style="background:#0ea5e9"></span>Airflow Worker (Celery)</div>
+      <div class="service"><span class="dot" style="background:#475569"></span>Redis (broker)<span class="port">:6379</span></div>
+    </div>
+
+    <div class="infra-card">
+      <h3>🧪 Experiment Tracking</h3>
+      <div class="service"><span class="dot" style="background:#a78bfa"></span>MLflow Server<span class="port">:5000</span></div>
+      <div class="service"><span class="dot" style="background:#a78bfa"></span>PostgreSQL (metadata)<span class="port">:5432</span></div>
+      <div class="service"><span class="dot" style="background:#a78bfa"></span>MinIO (artifacts)<span class="port">:9000</span></div>
+      <div class="service"><span class="dot" style="background:#475569"></span>MinIO Console<span class="port">:9001</span></div>
+    </div>
+
+    <div class="infra-card">
+      <h3>🚀 Model Serving</h3>
+      <div class="service"><span class="dot" style="background:#f97316"></span>FastAPI + Uvicorn<span class="port">:8000</span></div>
+      <div class="service"><span class="dot" style="background:#f97316"></span>GET /health</div>
+      <div class="service"><span class="dot" style="background:#f97316"></span>POST /predict</div>
+      <div class="service"><span class="dot" style="background:#f97316"></span>GET /metrics (Prometheus)</div>
+      <div class="service"><span class="dot" style="background:#f97316"></span>POST /feedback</div>
+    </div>
+
+    <div class="infra-card">
+      <h3>📡 Monitoring</h3>
+      <div class="service"><span class="dot" style="background:#eab308"></span>Evidently AI (cron)</div>
+      <div class="service"><span class="dot" style="background:#eab308"></span>DataDrift Report</div>
+      <div class="service"><span class="dot" style="background:#eab308"></span>DataQuality Report</div>
+      <div class="service"><span class="dot" style="background:#eab308"></span>TargetDrift Report</div>
+    </div>
+
+    <div class="infra-card">
+      <h3>☸️ Kubernetes (Prod)</h3>
+      <div class="service"><span class="dot" style="background:#22c55e"></span>Deployment (2 replicas)</div>
+      <div class="service"><span class="dot" style="background:#22c55e"></span>HPA (2–10 pods, CPU 70%)</div>
+      <div class="service"><span class="dot" style="background:#22c55e"></span>ClusterIP + LoadBalancer</div>
+      <div class="service"><span class="dot" style="background:#22c55e"></span>Ingress (nginx)</div>
+    </div>
+
+    <div class="infra-card">
+      <h3>🔔 Alerting</h3>
+      <div class="service"><span class="dot" style="background:#14b8a6"></span>Slack Webhook</div>
+      <div class="service"><span class="dot" style="background:#14b8a6"></span>Airflow REST API trigger</div>
+      <div class="service"><span class="dot" style="background:#14b8a6"></span>Drift threshold: 30%</div>
+      <div class="service"><span class="dot" style="background:#14b8a6"></span>Auto-retrain on drift</div>
+    </div>
+
+  </div>
+
+  <!-- ── DATA FLOWS ── -->
+  <p class="section-title">Key Data Flows</p>
+  <div class="flow-grid">
+
+    <div class="flow-card">
+      <h3 style="color:#0ea5e9">Training Flow</h3>
+      <div class="flow-steps">
+        <div class="flow-step"><span class="num" style="background:#0ea5e9">1</span>Generate 10k synthetic churn records</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#0ea5e9">2</span>Validate schema & save to data/raw/YYYY-MM-DD/</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#22c55e">3</span>StandardScaler + OneHotEncoder → fit on train</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#a78bfa">4</span>Train RandomForest with MLflow autolog</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#e879f9">5</span>Evaluate AUC, F1, confusion matrix → log artifacts</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#a78bfa">6</span>Register to MLflow registry → Staging if AUC > 0.75</div>
+      </div>
+    </div>
+
+    <div class="flow-card">
+      <h3 style="color:#f97316">Serving Flow</h3>
+      <div class="flow-steps">
+        <div class="flow-step"><span class="num" style="background:#f97316">1</span>Load Production model from MLflow on startup</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#f97316">2</span>POST /predict → Pydantic validation</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#f97316">3</span>Pipeline predicts (preprocessor + classifier)</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#f97316">4</span>Return { prediction, probability, model_version }</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#f97316">5</span>Log prediction to data/predictions.csv (UUID)</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#f97316">6</span>POST /feedback → write actual label back to CSV</div>
+      </div>
+    </div>
+
+    <div class="flow-card">
+      <h3 style="color:#eab308">Drift & Retrain Flow</h3>
+      <div class="flow-steps">
+        <div class="flow-step"><span class="num" style="background:#eab308">1</span>Cron (1am daily) loads last 24h predictions</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#eab308">2</span>Compare vs reference dataset (training data)</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#eab308">3</span>Generate Evidently HTML reports</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#eab308">4</span>drift_share > 0.3 → Slack alert + trigger DAG</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#14b8a6">5</span>Retrain on historical + labeled production data</div>
+        <div class="flow-connector"></div>
+        <div class="flow-step"><span class="num" style="background:#14b8a6">6</span>Champion/challenger (+1% AUC) → promote or reject</div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── CI/CD ── -->
+  <p class="section-title">CI / CD Pipeline</p>
+  <div class="cicd-row">
+
+    <div class="cicd-box">
+      <div class="icon">🔀</div>
+      <div class="label">Pull Request</div>
+      <div class="sub">feature branch</div>
+    </div>
+    <div class="cicd-arrow">→</div>
+
+    <div class="cicd-box">
+      <div class="icon">🔍</div>
+      <div class="label">Lint</div>
+      <div class="sub">ruff check</div>
+    </div>
+    <div class="cicd-arrow">→</div>
+
+    <div class="cicd-box">
+      <div class="icon">🧪</div>
+      <div class="label">Test</div>
+      <div class="sub">pytest ≥ 80% cov</div>
+    </div>
+    <div class="cicd-arrow">→</div>
+
+    <div class="cicd-box">
+      <div class="icon">🐳</div>
+      <div class="label">Build Images</div>
+      <div class="sub">no push on PR</div>
+    </div>
+    <div class="cicd-arrow">→</div>
+
+    <div class="cicd-box">
+      <div class="icon">🔀</div>
+      <div class="label">Merge to main</div>
+      <div class="sub">CD triggered</div>
+    </div>
+    <div class="cicd-arrow">→</div>
+
+    <div class="cicd-box">
+      <div class="icon">📦</div>
+      <div class="label">Push to GHCR</div>
+      <div class="sub">ghcr.io image</div>
+    </div>
+    <div class="cicd-arrow">→</div>
+
+    <div class="cicd-box">
+      <div class="icon">☸️</div>
+      <div class="label">kubectl apply</div>
+      <div class="sub">rolling update</div>
+    </div>
+    <div class="cicd-arrow">→</div>
+
+    <div class="cicd-box">
+      <div class="icon">✅</div>
+      <div class="label">Smoke Test</div>
+      <div class="sub">GET /health</div>
+    </div>
+
+  </div>
+
+  <!-- ── LEGEND ── -->
+  <p class="section-title">Legend</p>
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:#0ea5e9"></span>Ingestion / Airflow</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#22c55e"></span>Feature Engineering</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#a78bfa"></span>Training / MLflow</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#e879f9"></span>Evaluation</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#f97316"></span>Serving / FastAPI</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#eab308"></span>Monitoring / Evidently</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#14b8a6"></span>Retraining</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#475569"></span>Infrastructure</div>
+  </div>
+
+</body>
+</html>
