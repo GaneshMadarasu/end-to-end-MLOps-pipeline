@@ -1,0 +1,27 @@
+version: "3.8"
+
+# Local development overrides
+services:
+  airflow-webserver:
+    environment:
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__WEBSERVER__RELOAD_ON_PLUGIN_CHANGE: "true"
+
+  model-serving:
+    volumes:
+      - ./src:/app/src
+      - ./data:/app/data
+      - ./monitoring:/app/monitoring
+    environment:
+      DEBUG: "true"
+      RELOAD: "true"
+    command: uvicorn src.serving.app:app --host 0.0.0.0 --port 8000 --reload
+
+  mlflow-server:
+    ports:
+      - "5000:5000"
+
+  minio:
+    ports:
+      - "9000:9000"
+      - "9001:9001"

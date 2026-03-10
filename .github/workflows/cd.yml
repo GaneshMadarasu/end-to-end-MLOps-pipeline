@@ -1,0 +1,120 @@
+name: CD
+
+on:
+  push:
+    branches: [main]
+
+env:
+  REGISTRY: ghcr.io
+  ORG: ${{ github.repository_owner }}
+
+jobs:
+  build-and-push:
+    name: Build & Push Images
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.version }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata for serving image
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.ORG }}/mlops-serving
+          tags: |
+            type=sha,prefix=,suffix=,format=short
+            type=raw,value=latest
+
+      - name: Build and push serving image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.serving
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Build and push monitoring image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.monitoring
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.ORG }}/mlops-monitoring:${{ steps.meta.outputs.version }}
+            ${{ env.REGISTRY }}/${{ env.ORG }}/mlops-monitoring:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Kubernetes
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up kubectl
+        uses: azure/setup-kubectl@v3
+        with:
+          version: "v1.29.0"
+
+      - name: Configure kubectl
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG }}" | base64 -d > ~/.kube/config
+
+      - name: Update deployment image tag
+        run: |
+          IMAGE="${{ env.REGISTRY }}/${{ env.ORG }}/mlops-serving:${{ needs.build-and-push.outputs.image_tag }}"
+          kubectl set image deployment/model-serving \
+            model-serving=$IMAGE \
+            -n mlops
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f k8s/namespace.yaml
+          kubectl apply -f k8s/configmap.yaml
+          kubectl apply -f k8s/deployment.yaml
+          kubectl apply -f k8s/service.yaml
+          kubectl apply -f k8s/hpa.yaml
+          kubectl apply -f k8s/ingress.yaml
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/model-serving -n mlops --timeout=300s
+
+      - name: Smoke test
+        run: |
+          # Wait for LoadBalancer IP
+          for i in $(seq 1 30); do
+            LB_IP=$(kubectl get svc model-serving-lb -n mlops -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null)
+            if [ -n "$LB_IP" ]; then break; fi
+            echo "Waiting for LoadBalancer IP... ($i/30)"
+            sleep 10
+          done
+
+          if [ -z "$LB_IP" ]; then
+            echo "WARNING: Could not get LoadBalancer IP; using port-forward for smoke test"
+            kubectl port-forward svc/model-serving 8000:80 -n mlops &
+            sleep 5
+            curl -f http://localhost:8000/health
+          else
+            curl -f "http://$LB_IP/health"
+          fi

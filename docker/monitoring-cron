@@ -1,0 +1,4 @@
+# Run drift detection every day at 1am
+0 1 * * * root cd /app && python -m src.monitoring.drift_detector >> /var/log/cron.log 2>&1
+
+# End of crontab
